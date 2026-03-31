@@ -1,11 +1,8 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
-import uvicorn
-import os
 import cv2
 import torch
-import torch.nn.functional as F
 from basicsr.archs.ddcolor_arch import DDColor
 from PIL import Image
 import torchvision.transforms as transforms
