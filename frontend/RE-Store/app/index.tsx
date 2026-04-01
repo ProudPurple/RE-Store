@@ -27,7 +27,7 @@ const styles = StyleSheet.create({
   },
   titleText: {
     color: "#F0F0F0",
-    fontSize: height/20,
+    fontSize: height/16,
     fontWeight: "bold",
     textAlign: "center",
     paddingBottom: height/3
@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: '#0D0D0D',
     padding: 15,
-    borderRadius: 10,
+    borderRadius: width*3/8,
     borderWidth: 4,
     borderColor: '#C77DFF',
     shadowColor: '#C77DFF',
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "#F0F0F0",
-    fontSize:32,
+    fontSize:height/24,
     fontWeight:"bold",
     textAlign: "center",
     textAlignVertical: "center",
