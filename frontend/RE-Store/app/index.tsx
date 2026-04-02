@@ -1,9 +1,17 @@
-import { StyleSheet, TouchableOpacity, Text, View, Dimensions } from "react-native";
+import { StyleSheet, TouchableOpacity, Text, View, Dimensions, Platform } from "react-native";
+import { useFonts } from 'expo-font';
 import { router } from "expo-router";
+import { getFontFamily } from "@/utils/fontFamily";
+
+
 
 const {width, height} = Dimensions.get('window');
 
 export default function Index() {
+  const [loaded] = useFonts({
+    'Anton-Regular': require('../assets/fonts/AntonRegular.ttf'),
+  });
+
   return (
     <View style={styles.container}>
       <Text style={styles.titleText}>RE-Store</Text>
@@ -20,15 +28,15 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex:1,
-    backgroundColor:"#0D0D0D",
+    backgroundColor:"#200b30",
     alignItems: "center",
     justifyContent: "center",
     gap: 25,
   },
   titleText: {
     color: "#F0F0F0",
-    fontSize: height/16,
-    fontWeight: "bold",
+    fontSize: height/12,
+    fontFamily: getFontFamily("normal"),
     textAlign: "center",
     paddingBottom: height/3
   },
@@ -37,7 +45,7 @@ const styles = StyleSheet.create({
     height: height*1/8,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: '#0D0D0D',
+    backgroundColor: '#200b30',
     padding: 15,
     borderRadius: width*3/8,
     borderWidth: 4,
@@ -50,7 +58,8 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "#F0F0F0",
-    fontSize:height/24,
+    fontSize:height/20,
+    fontFamily: getFontFamily("normal"),
     fontWeight:"bold",
     textAlign: "center",
     textAlignVertical: "center",

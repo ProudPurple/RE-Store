@@ -17,23 +17,27 @@ load_dotenv()
 app = FastAPI()
 
 def load_sharpener():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
     model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
     upsampler = RealESRGANer(
         scale=4,
         model_path="weights/RealESRGAN_x4plus.pth",
         model=model,
-        tile=400,
+        tile=512,
         tile_pad=10,
         pre_pad=0,
-        half=False
+        half=False,
+        device=device,
     )
 
     sharpener = GFPGANer(
         model_path="weights/GFPGANv1.4.pth",
-        upscale=4,
+        upscale=2,
         arch="clean",
         channel_multiplier=2,
-        bg_upsampler=upsampler
+        bg_upsampler=upsampler,
+        device=device
     )
     return sharpener
 
@@ -155,6 +159,13 @@ async def sharpen_image(file: UploadFile = File(...)):
     np_arr = np.frombuffer(contents, np.uint8)
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
+    h, w, _ = img.shape
+
+    max_dim = 1024
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        img = cv2.resize(img, (int(w * scale), int(h * scale)))
+
     # Run GFPGAN enhancement
     _, _, sharpened_img = sharpener.enhance(
         img,
@@ -175,5 +186,5 @@ async def sharpen_image(file: UploadFile = File(...)):
         cv2.imwrite(tmp.name, sharpened_img)
         return FileResponse(tmp.name, media_type="image/png", filename="sharpened.png")
 #checky checky checky
-#uvicorn main:app --reload --port 3000
+#uvicorn main:app --reload --port 3000 --host 0.0.0.0
 #source venv/Scripts/activate
