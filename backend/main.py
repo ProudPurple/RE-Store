@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 import cv2
 import torch
+import os
 from basicsr.archs.ddcolor_arch import DDColor
 from PIL import Image
 import torchvision.transforms as transforms
@@ -11,10 +12,22 @@ from gfpgan import GFPGANer
 from realesrgan import RealESRGANer
 from basicsr.archs.rrdbnet_arch import RRDBNet
 import tempfile
+import cloudinary
+import cloudinary.uploader
 
 load_dotenv()
 
 app = FastAPI()
+
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key = os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
+)
+
+def upload_to_cloudinary(image_path: str, folder: str = "restorations") -> str:
+    result = cloudinary.uploader.upload(image_path, folder=folder)
+    return result["secure_url"]
 
 def load_sharpener():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -109,7 +122,8 @@ async def fix_image(file: UploadFile = File(...), mask: UploadFile = File(...)):
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         cv2.imwrite(tmp.name, result)
-        return FileResponse(tmp.name, media_type="image/png", filename="fixed.png")
+        url = upload_to_cloudinary(tmp.name)
+        return {"url": url}
 
 @app.post("/colorize")
 async def colorize_image(file: UploadFile = File(...)):
@@ -149,7 +163,8 @@ async def colorize_image(file: UploadFile = File(...)):
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         cv2.imwrite(tmp.name, result)
-        return FileResponse(tmp.name, media_type="image/png", filename="colorized.png")
+        url = upload_to_cloudinary(tmp.name)
+        return {"url": url}
 
 
 @app.post("/sharpen")
@@ -184,7 +199,5 @@ async def sharpen_image(file: UploadFile = File(...)):
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         cv2.imwrite(tmp.name, sharpened_img)
-        return FileResponse(tmp.name, media_type="image/png", filename="sharpened.png")
-#checky checky checky
-#uvicorn main:app --reload --port 3000 --host 0.0.0.0
-#source venv/Scripts/activate
+        url = upload_to_cloudinary(tmp.name)
+        return {"url": url}

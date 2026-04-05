@@ -6,7 +6,7 @@ import { router } from "expo-router";
 import { getFontFamily } from "@/utils/fontFamily";
 
 const {width, height} = Dimensions.get('window');
-const API_URL = 'http://172.20.10.2:3000';
+const API_URL = 'https://nonlinkage-unpunctiliously-goldie.ngrok-free.dev';
 
 export default function Conversion() {
     const [imageUri, setImageUri] = useState<string | null>(null);
@@ -44,17 +44,34 @@ export default function Conversion() {
             body: formData,
         });
 
-        
-        const arrayBuffer = await response.arrayBuffer();
-
-        // Convert to base64
-        const base64 = btoa(
-            new Uint8Array(arrayBuffer)
-                .reduce((data, byte) => data + String.fromCharCode(byte), '')
-        );
-
-        setImageUri(`data:image/png;base64,${base64}`);
+        const data = await response.json();
+        setImageUri(data.url);
+        colorize()
         console.log('\x1b[32m Sharpened! \x1b[0m');
+    };
+
+    const colorize = async () => {
+        if (!imageUri)
+            return;
+
+        console.log('\x1b[33m Colorizing Request Recieved \x1b[0m');
+
+        const formData = new FormData();
+        formData.append('file', {
+            uri: imageUri,
+            type: 'image/png',
+            name: 'photo.png',
+        } as any);
+
+        const response = await fetch(`${API_URL}/colorize`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        const data = await response.json();
+        setImageUri(data.url);
+
+        console.log('\x1b[32m Colorized! \x1b[0m');
     };
 
     return (
