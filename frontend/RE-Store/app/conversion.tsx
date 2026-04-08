@@ -1,17 +1,37 @@
-import { StyleSheet, Image, TouchableOpacity, Text, View, Dimensions } from "react-native";
+import { StyleSheet, Image, TouchableOpacity, Text, View, Dimensions, PanResponder } from "react-native";
+import ViewShot from 'react-native-view-shot';
+import Svg, { Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useFonts } from 'expo-font';
 import { router } from "expo-router";
 import { getFontFamily } from "@/utils/fontFamily";
-
 const {width, height} = Dimensions.get('window');
 const API_URL = 'https://nonlinkage-unpunctiliously-goldie.ngrok-free.dev';
 
 export default function Conversion() {
+    const maskRef = useRef<ViewShot | null>(null);
     const [imageUri, setImageUri] = useState<string | null>(null);
+    const [paths, setPaths] = useState<string[]>([]);
+    const [curPath, setCurPath] = useState('');
     const [loaded] = useFonts({
         'Anton-Regular': require('../assets/fonts/AntonRegular.ttf'),
+    });
+
+    const panResponder = PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderGrant: (e) => {
+            const { locationX, locationY } = e.nativeEvent;
+            setCurPath(`M${locationX},${locationY}`);
+        },
+        onPanResponderMove: (e) => {
+            const { locationX, locationY } = e.nativeEvent;
+            setCurPath(prev => `${prev} L${locationX},${locationY}`);
+        },
+        onPanResponderRelease: () => {
+            setPaths(prev => [...prev, curPath]);
+            setCurPath('');
+        },
     });
 
     const pickImage = async () => {
@@ -70,8 +90,44 @@ export default function Conversion() {
 
         const data = await response.json();
         setImageUri(data.url);
-
         console.log('\x1b[32m Colorized! \x1b[0m');
+        fix();
+    };
+
+    const fix = async () => {
+        if (!imageUri)
+            return;
+
+        const ref = maskRef.current;
+
+        console.log('\x1b[33m Fixing Request Recieved \x1b[0m');
+        if (!ref || typeof ref.capture !== 'function') {
+            console.log("Capture not available");
+            return;
+        }
+        const maskUri = await ref.capture();
+
+        const formData = new FormData();
+        formData.append('file', {
+            uri: imageUri,
+            type: 'image/png',
+            name: 'photo.png',
+        } as any);
+        formData.append('mask', {
+            uri: maskUri,
+            type: 'image/png',
+            name: 'mask.png',
+        } as any);
+
+        const response = await fetch(`${API_URL}/fix`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        const data = await response.json();
+        setImageUri(data.url);
+
+        console.log('\x1b[32m Fixed! \x1b[0m');
     };
 
     return (
@@ -79,16 +135,40 @@ export default function Conversion() {
             <TouchableOpacity onPress = {() => router.push('..')}>
                 <Image source={require('../assets/images/back-arrow.png')} style={styles.exit}/>
             </TouchableOpacity>
-            <Text style={[styles.labelText]}>Upload An Image</Text>
-            <TouchableOpacity onPress={pickImage} style={{paddingTop:height/16}}>
+
                 {imageUri ? (
-                    <Image source={{ uri: imageUri }} style={styles.image}/>
+                    <View style={{alignItems:"center"}}>
+                        <Text style={[styles.labelText, {fontSize: height/30, margin: height/40}]}>Highlight Tears and Creases</Text>
+                        <Image source={{ uri: imageUri }} style={styles.image}/>
+                        <Svg style={{ position: "absolute", width: width*7/8, height: width*7/8, marginTop: height/10 }}{...panResponder.panHandlers}>
+                            {paths.map((path, i) => (
+                                <Path key={i} d={path} stroke="rgba(139,63,200,0.6)" strokeWidth={20}fill="none" strokeLinecap="round"/>
+                            ))}
+                            {curPath ? (
+                            <Path d={curPath} stroke="rgba(139,63,200,0.6)" strokeWidth={20} fill="none" strokeLinecap="round"/>
+                            ) : null}
+                        </Svg>
+                        <ViewShot ref={maskRef} options={{ format: 'png', result: 'tmpfile' }} style={{ position: 'absolute', width: width*7/8, height: width*7/8, marginTop: height/10, zIndex: -1 }}>
+                            <Svg width="100%" height="100%">
+                                {paths.map((path, i) => (
+                                    <Path key={i} d={path} stroke="white" strokeWidth={20} fill="none" strokeLinecap="round"/>
+                                ))}
+                                {curPath && (
+                                    <Path d={curPath} stroke="white" strokeWidth={20} fill="none" strokeLinecap="round"/>
+                                )}
+                            </Svg>
+                        </ViewShot>
+                    </View>
                 ) : (
-                    <Image source={imageUri ? { uri: imageUri } : require('../assets/images/upload-prompt.png')} style={styles.placeholder}/>
+                    <View>
+                        <Text style={[styles.labelText]}>Upload An Image</Text>
+                        <TouchableOpacity onPress={pickImage} style={{paddingTop:height/16}}>
+                            <Image source={imageUri ? { uri: imageUri } : require('../assets/images/upload-prompt.png')} style={styles.placeholder}/>
+                        </TouchableOpacity>
+                    </View>
                 )}
-            </TouchableOpacity>
             {imageUri && (
-                <TouchableOpacity style={[styles.button, {margin: height/16}]} onPress={sharpen}>
+                <TouchableOpacity style={[styles.button, {margin: height/16}]} onPress={fix}>
                     <Text style={styles.buttonText}>Confirm</Text>
                 </TouchableOpacity>
             )}

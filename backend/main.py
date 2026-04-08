@@ -1,5 +1,10 @@
+import sys
+import io
+sys.stderr = io.StringIO()
+
 from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import FileResponse
+from diffusers import DPMSolverMultistepScheduler, AutoPipelineForInpainting
+from PIL import Image
 from dotenv import load_dotenv
 import cv2
 import torch
@@ -14,6 +19,8 @@ from basicsr.archs.rrdbnet_arch import RRDBNet
 import tempfile
 import cloudinary
 import cloudinary.uploader
+
+sys.stderr = sys.__stderr__
 
 load_dotenv()
 
@@ -66,64 +73,81 @@ def load_colorizer():
         num_scales=3,
         dec_layers=9
     )
-    ckpt = torch.load('weights/ddcolor.pth', map_location='cpu')
-    model.load_state_dict(ckpt['params'], strict=False)
-    model.eval()
-    return model
+    ckpt = torch.load('weights/ddcolor.pth', map_location='cpu', weights_only=True)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.eval().to(device)
+    return model, device
 
 def load_fixer():
-    lama = torch.jit.load('weights/big-lama.pt', map_location='cpu')
-    lama.eval()
-    return lama
+    pipe = AutoPipelineForInpainting.from_pretrained(
+        "runwayml/stable-diffusion-inpainting",
+        torch_dtype=torch.float32,
+        use_safetensors=True,
+        variant="fp16",
+    )
+    pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+    pipe.safety_checker = None
+    pipe = pipe.to("cuda")
+    pipe.enable_attention_slicing()
+    pipe.vae.enable_slicing()
+    return pipe
 
-lama = load_fixer()
-colorizer = load_colorizer()
-sharpener = load_sharpener()
+def silent_load(fn):
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    sys.stdout = io.StringIO()
+    sys.stderr = io.StringIO()
+    try:
+        result = fn()
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+    return result
+
+pipe = silent_load(load_fixer)
+colorizer, device = silent_load(load_colorizer)
+sharpener = silent_load(load_sharpener)
 
 @app.post("/fix")
 async def fix_image(file: UploadFile = File(...), mask: UploadFile = File(...)):
-    # Read image
     contents = await file.read()
-    np_arr = np.frombuffer(contents, np.uint8)
-    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-    orig_size = (img.shape[1], img.shape[0])
+    img = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
 
-    # Read mask
     mask_contents = await mask.read()
-    mask_arr = np.frombuffer(mask_contents, np.uint8)
-    mask_img = cv2.imdecode(mask_arr, cv2.IMREAD_GRAYSCALE)
+    mask_img = cv2.imdecode(np.frombuffer(mask_contents, np.uint8), cv2.IMREAD_GRAYSCALE)
 
-    # Resize both to 512
     img_resized = cv2.resize(img, (512, 512))
     mask_resized = cv2.resize(mask_img, (512, 512), interpolation=cv2.INTER_NEAREST)
 
-    # Binarize mask
     _, mask_binary = cv2.threshold(mask_resized, 127, 255, cv2.THRESH_BINARY)
 
-    # Convert image to RGB tensor
-    img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
-    img_tensor = torch.from_numpy(img_rgb).permute(2, 0, 1).float() / 255.0
-    img_tensor = img_tensor.unsqueeze(0)
+    image_pil = Image.fromarray(cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB))
+    mask_pil = Image.fromarray(mask_binary).convert("L")
 
-    # Convert mask to tensor
-    mask_tensor = torch.from_numpy(mask_binary).float() / 255.0
-    mask_tensor = (mask_tensor > 0.5).float()
-    mask_tensor = mask_tensor.unsqueeze(0).unsqueeze(0)
+    prompt = "high quality restored photograph, seamless reconstruction of damaged areas, realistic textures, consistent lighting, detailed"
+    negative_prompt = "blurry, distorted, artifacts, oversaturated, low quality, unrealistic"
 
-    # Run LaMa
-    with torch.no_grad():
-        result = lama(img_tensor, mask_tensor)
+    torch.cuda.empty_cache()
+    inpainted = pipe(
+        prompt=prompt, negative_prompt=negative_prompt,
+        image=image_pil, mask_image=mask_pil,
+        num_inference_steps=10, guidance_scale=7.5
+    ).images[0]
 
-    # Convert result back to image
-    result = result.squeeze(0).permute(1, 2, 0).cpu().numpy()
-    result = (result * 255).clip(0, 255).astype(np.uint8)
-    result = cv2.resize(result, orig_size)
-    result = result[:, :, ::-1].copy()
+    inpainted_bgr = cv2.cvtColor(np.array(inpainted), cv2.COLOR_RGB2BGR)
+    inpainted_resized = cv2.resize(inpainted_bgr, (img.shape[1], img.shape[0]))
 
+    mask_full = cv2.resize(mask_binary, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
+    mask_3ch = cv2.cvtColor(mask_full, cv2.COLOR_GRAY2BGR) / 255.0
+    original_bgr = img.astype(np.float32)
+    composite = (inpainted_resized.astype(np.float32) * mask_3ch + original_bgr * (1 - mask_3ch)).astype(np.uint8)
+    print("mask white %:", (mask_binary == 255).mean() * 100)
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-        cv2.imwrite(tmp.name, result)
+        cv2.imwrite(tmp.name, composite)
         url = upload_to_cloudinary(tmp.name)
-        return {"url": url}
+
+    os.unlink(tmp.name)
+    return {"url": url}
 
 @app.post("/colorize")
 async def colorize_image(file: UploadFile = File(...)):
@@ -134,19 +158,20 @@ async def colorize_image(file: UploadFile = File(...)):
 
     # Prepare tensor for DDColor
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img_pil = Image.fromarray(img_rgb).resize([512, 512])
+    img_pil = Image.fromarray(img_rgb).resize([1024, 1024])
     transform = transforms.Compose([transforms.ToTensor()])
-    tensor = transform(img_pil).unsqueeze(0)
+    tensor = transform(img_pil).unsqueeze(0).to(device)
 
     # Run colorization
     with torch.no_grad():
         output = colorizer(tensor)
 
     # Extract UV channels
-    uv = output.squeeze(0).permute(1, 2, 0).numpy()
+    uv = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
+    uv = (uv * 128).clip(-128, 127)
 
     # Build LAB image and replace AB channels
-    img_resized = cv2.resize(img, (512, 512))
+    img_resized = cv2.resize(img, (1024, 1024))
     img_lab = cv2.cvtColor(img_resized, cv2.COLOR_BGR2LAB)
     ab = uv.copy()
     ab[:, :, 0] = (ab[:, :, 0] + 128).clip(0, 255)
@@ -164,7 +189,9 @@ async def colorize_image(file: UploadFile = File(...)):
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         cv2.imwrite(tmp.name, result)
         url = upload_to_cloudinary(tmp.name)
-        return {"url": url}
+
+    os.unlink(tmp.name)
+    return {"url": url}
 
 
 @app.post("/sharpen")
@@ -200,4 +227,5 @@ async def sharpen_image(file: UploadFile = File(...)):
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         cv2.imwrite(tmp.name, sharpened_img)
         url = upload_to_cloudinary(tmp.name)
-        return {"url": url}
+    os.unlink(tmp.name)
+    return {"url": url}
