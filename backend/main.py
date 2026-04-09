@@ -46,21 +46,21 @@ def save_groups(groups):
     with open(GROUPS_FILE, "w") as f:
         json.dump(groups, f)
 
-@app.get("/groups")
-def get_groups():
-    return load_groups()
+def save_and_upload(img):
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        cv2.imwrite(tmp.name, img)
+        url = upload_to_cloudinary(tmp.name)
+    os.unlink(tmp.name)
+    return url
 
-def add_photo(url: str):
+def store_photo(url: str):
     groups = load_groups()
     current = groups[-1] if groups else None
-
     if not current or len(current["photos"]) >= 8:
         current = {"id": f"group-{len(groups) + 1}", "photos": []}
         groups.append(current)
-
     current["photos"].append(url)
     save_groups(groups)
-    return {"ok": True}
 
 def upload_to_cloudinary(image_path: str, folder: str = "restorations") -> str:
     result = cloudinary.uploader.upload(image_path, folder=folder)
@@ -138,17 +138,26 @@ pipe = silent_load(load_fixer)
 colorizer, device = silent_load(load_colorizer)
 sharpener = silent_load(load_sharpener)
 
-@app.post("/fix")
-async def fix_image(file: UploadFile = File(...), mask: UploadFile = File(...)):
+@app.put("/run")
+async def run(file: UploadFile = File(...), mask: UploadFile = File(...)):
     contents = await file.read()
-    img = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
-
     mask_contents = await mask.read()
+    
+    img = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
     mask_img = cv2.imdecode(np.frombuffer(mask_contents, np.uint8), cv2.IMREAD_GRAYSCALE)
 
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        cv2.imwrite(tmp.name, img)
+        store_photo(upload_to_cloudinary(tmp.name))
+    os.unlink(tmp.name)
+
+    await fix_image(img, mask_img)
+
+async def fix_image(img, mask_img):
+    await colorize_image(img)
+    await sharpen_image(img)
     img_resized = cv2.resize(img, (512, 512))
     mask_resized = cv2.resize(mask_img, (512, 512), interpolation=cv2.INTER_NEAREST)
-
     _, mask_binary = cv2.threshold(mask_resized, 127, 255, cv2.THRESH_BINARY)
 
     image_pil = Image.fromarray(cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB))
@@ -166,26 +175,21 @@ async def fix_image(file: UploadFile = File(...), mask: UploadFile = File(...)):
 
     inpainted_bgr = cv2.cvtColor(np.array(inpainted), cv2.COLOR_RGB2BGR)
     inpainted_resized = cv2.resize(inpainted_bgr, (img.shape[1], img.shape[0]))
-
     mask_full = cv2.resize(mask_binary, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
     mask_3ch = cv2.cvtColor(mask_full, cv2.COLOR_GRAY2BGR) / 255.0
-    original_bgr = img.astype(np.float32)
-    composite = (inpainted_resized.astype(np.float32) * mask_3ch + original_bgr * (1 - mask_3ch)).astype(np.uint8)
-    print("mask white %:", (mask_binary == 255).mean() * 100)
+    composite = (inpainted_resized.astype(np.float32) * mask_3ch + img.astype(np.float32) * (1 - mask_3ch)).astype(np.uint8)
+
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         cv2.imwrite(tmp.name, composite)
-        url = upload_to_cloudinary(tmp.name)
+        store_photo(upload_to_cloudinary(tmp.name))
+    
+    await colorize_image(composite)
+    await sharpen_image(composite)
 
-    os.unlink(tmp.name)
-    return {"url": url}
 
-@app.post("/colorize")
-async def colorize_image(file: UploadFile = File(...)):
-    # Read image
-    contents = await file.read()
-    np_arr = np.frombuffer(contents, np.uint8)
-    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    
 
+async def colorize_image(img):
     # Prepare tensor for DDColor
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img_pil = Image.fromarray(img_rgb).resize([1024, 1024])
@@ -218,20 +222,12 @@ async def colorize_image(file: UploadFile = File(...)):
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         cv2.imwrite(tmp.name, result)
-        url = upload_to_cloudinary(tmp.name)
+        store_photo(upload_to_cloudinary(tmp.name))
 
     os.unlink(tmp.name)
-    add_photo(url=url)
-    return {"url": url}
 
 
-@app.post("/sharpen")
-async def sharpen_image(file: UploadFile = File(...)):
-    # Read image
-    contents = await file.read()
-    np_arr = np.frombuffer(contents, np.uint8)
-    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
+async def sharpen_image(img):
     h, w, _ = img.shape
 
     max_dim = 1024
@@ -257,6 +253,6 @@ async def sharpen_image(file: UploadFile = File(...)):
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         cv2.imwrite(tmp.name, sharpened_img)
-        url = upload_to_cloudinary(tmp.name)
+        store_photo(upload_to_cloudinary(tmp.name))
+    await colorize_image(sharpened_img)
     os.unlink(tmp.name)
-    return {"url": url}

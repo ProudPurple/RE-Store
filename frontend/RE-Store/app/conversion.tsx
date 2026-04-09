@@ -6,7 +6,6 @@ import { useState, useRef } from 'react';
 import { useFonts } from 'expo-font';
 import { router } from "expo-router";
 import { getFontFamily } from "@/utils/fontFamily";
-import { addPhoto, getGroups, getPhoto } from '../assets/photos/group-manager';
 const {width, height} = Dimensions.get('window');
 const API_URL = 'https://nonlinkage-unpunctiliously-goldie.ngrok-free.dev';
 
@@ -47,65 +46,12 @@ export default function Conversion() {
         console.log('\x1b[32m Image Picked \x1b[0m');
     };
 
-    const sharpen = async () => {
-        if (!imageUri)
-            return;
-
-        console.log('\x1b[33m Sharpening Request Recieved \x1b[0m');
-
-        const formData = new FormData();
-        formData.append('file', {
-            uri: imageUri,
-            type: 'image/png',
-            name: 'photo.png',
-        } as any);
-
-        const response = await fetch(`${API_URL}/sharpen`, {
-            method: 'POST',
-            body: formData,
-        });
-
-        const data = await response.json();
-        setImageUri(data.uri)
-        addPhoto(data.uri)
-        console.log(getGroups())
-        const curPhoto = await getPhoto(0,0)
-        setImageUri(curPhoto)
-
-        console.log('\x1b[32m Sharpened! \x1b[0m');
-    };
-
-    const colorize = async () => {
-        if (!imageUri)
-            return;
-
-        console.log('\x1b[33m Colorizing Request Recieved \x1b[0m');
-
-        const formData = new FormData();
-        formData.append('file', {
-            uri: imageUri,
-            type: 'image/png',
-            name: 'photo.png',
-        } as any);
-
-        const response = await fetch(`${API_URL}/colorize`, {
-            method: 'POST',
-            body: formData,
-        });
-
-        const data = await response.json();
-        setImageUri(data.url);
-        console.log('\x1b[32m Colorized! \x1b[0m');
-        
-    };
-
-    const fix = async () => {
+    const run = async () => {
         if (!imageUri)
             return;
 
         const ref = maskRef.current;
 
-        console.log('\x1b[33m Fixing Request Recieved \x1b[0m');
         if (!ref || typeof ref.capture !== 'function') {
             console.log("Capture not available");
             return;
@@ -124,15 +70,10 @@ export default function Conversion() {
             name: 'mask.png',
         } as any);
 
-        const response = await fetch(`${API_URL}/fix`, {
-            method: 'POST',
+        await fetch(`${API_URL}/run`, {
+            method: 'PUT',
             body: formData,
         });
-
-        const data = await response.json();
-        setImageUri(data.url);
-
-        console.log('\x1b[32m Fixed! \x1b[0m');
     };
 
     return (
@@ -173,7 +114,7 @@ export default function Conversion() {
                     </View>
                 )}
             {imageUri && (
-                <TouchableOpacity style={[styles.button, {margin: height/16}]} onPress={colorize}>
+                <TouchableOpacity style={[styles.button, {margin: height/16}]} onPress={run}>
                     <Text style={styles.buttonText}>Confirm</Text>
                 </TouchableOpacity>
             )}

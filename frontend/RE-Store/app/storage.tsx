@@ -1,28 +1,60 @@
-import { View, Text, Image, Dimensions} from 'react-native';
-import { addPhoto, getGroups, getPhoto, } from '../assets/photos/group-manager';
+import { FlatList, View, Text, Image, Dimensions, StyleSheet, TouchableOpacity } from 'react-native';
+import groups from '../assets/photos/groups.json';
+import { router } from 'expo-router'
+import { getFontFamily } from "@/utils/fontFamily";
 import { useState, useEffect } from 'react';
 const {width, height} = Dimensions.get('window');
 
 export default function Storage() {
-  const [imageUri, setImageUri] = useState<string | null>(null);
-    const fetchPhoto = async (groupIndex: number, photoIndex: number) => {
-    const photo = await getPhoto(groupIndex, photoIndex);
-    setImageUri(photo);
-  };
-
+  const [photos, setPhotos] = useState<string[]>([]);
+  
   useEffect(() => {
-    fetchPhoto(0, 0);
+    const firstPhotos = groups.map((g: { photos: string[] }) => g.photos[0]).filter(Boolean);
+    setPhotos(firstPhotos);
   }, []);
 
-  console.log(imageUri == null)
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Storage Screen</Text>
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} style={{width:width*7/8,height:width*7/8}}/>
+    <View style={styles.container}>
+       <TouchableOpacity onPress = {() => router.push('..')}>
+            <Image source={require('../assets/images/back-arrow.png')} style={styles.exit}/>
+        </TouchableOpacity>
+      <Text style={styles.labelText}>Storage</Text>
+      {photos.length > 0 ? (
+        <FlatList columnWrapperStyle={{ justifyContent: 'flex-start' }} style={{marginTop: height/16, alignSelf: "flex-start"}} data={photos} numColumns={3} keyExtractor={(item,index) => index.toString()}
+          renderItem={({item}) => (<Image source={{uri: item}} style={styles.image}/>)}
+        />
       ) : (
-        <Text>N/A</Text>
+        <Text style={[styles.labelText, {verticalAlign: "middle"}]}>N/A</Text>
       )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex:1,
+    backgroundColor:"#200b30",
+    alignItems: "center",
+    paddingTop: height/8,
+  },
+  image: {
+    width: width/3,
+    height: width/3,
+    resizeMode: 'contain',
+  },
+  exit: {
+      position: "absolute",
+      top: -width/8,
+      left: -width/2 + width/64,
+      width: width/8,
+      height: width/8,
+      borderRadius: width/16,
+  },
+  labelText: {
+      color: "#F0F0F0",
+      fontSize:height/15,
+      fontFamily: getFontFamily("normal"),
+      fontWeight:"bold",
+      textAlign: "center",
+  },
+});
