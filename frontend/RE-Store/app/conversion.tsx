@@ -6,6 +6,7 @@ import { useState, useRef } from 'react';
 import { useFonts } from 'expo-font';
 import { router } from "expo-router";
 import { getFontFamily } from "@/utils/fontFamily";
+import { addPhoto, getGroups, getPhoto } from '../assets/photos/group-manager';
 const {width, height} = Dimensions.get('window');
 const API_URL = 'https://nonlinkage-unpunctiliously-goldie.ngrok-free.dev';
 
@@ -65,8 +66,12 @@ export default function Conversion() {
         });
 
         const data = await response.json();
-        setImageUri(data.url);
-        colorize()
+        setImageUri(data.uri)
+        addPhoto(data.uri)
+        console.log(getGroups())
+        const curPhoto = await getPhoto(0,0)
+        setImageUri(curPhoto)
+
         console.log('\x1b[32m Sharpened! \x1b[0m');
     };
 
@@ -91,7 +96,7 @@ export default function Conversion() {
         const data = await response.json();
         setImageUri(data.url);
         console.log('\x1b[32m Colorized! \x1b[0m');
-        fix();
+        
     };
 
     const fix = async () => {
@@ -168,7 +173,7 @@ export default function Conversion() {
                     </View>
                 )}
             {imageUri && (
-                <TouchableOpacity style={[styles.button, {margin: height/16}]} onPress={fix}>
+                <TouchableOpacity style={[styles.button, {margin: height/16}]} onPress={colorize}>
                     <Text style={styles.buttonText}>Confirm</Text>
                 </TouchableOpacity>
             )}

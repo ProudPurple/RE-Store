@@ -19,18 +19,48 @@ from basicsr.archs.rrdbnet_arch import RRDBNet
 import tempfile
 import cloudinary
 import cloudinary.uploader
+import json
 
 sys.stderr = sys.__stderr__
 
 load_dotenv()
 
 app = FastAPI()
-
+groups = []
 cloudinary.config(
     cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
     api_key = os.getenv("CLOUDINARY_API_KEY"),
     api_secret=os.getenv("CLOUDINARY_API_SECRET")
 )
+
+GROUPS_FILE = '../frontend/RE-Store/assets/photos/groups.json'
+
+def load_groups():
+    if os.path.exists(GROUPS_FILE):
+        with open(GROUPS_FILE, "r") as f:
+            content = f.read()
+            return json.loads(content) if content.strip() else []
+    return []
+
+def save_groups(groups):
+    with open(GROUPS_FILE, "w") as f:
+        json.dump(groups, f)
+
+@app.get("/groups")
+def get_groups():
+    return load_groups()
+
+def add_photo(url: str):
+    groups = load_groups()
+    current = groups[-1] if groups else None
+
+    if not current or len(current["photos"]) >= 8:
+        current = {"id": f"group-{len(groups) + 1}", "photos": []}
+        groups.append(current)
+
+    current["photos"].append(url)
+    save_groups(groups)
+    return {"ok": True}
 
 def upload_to_cloudinary(image_path: str, folder: str = "restorations") -> str:
     result = cloudinary.uploader.upload(image_path, folder=folder)
@@ -191,6 +221,7 @@ async def colorize_image(file: UploadFile = File(...)):
         url = upload_to_cloudinary(tmp.name)
 
     os.unlink(tmp.name)
+    add_photo(url=url)
     return {"url": url}
 
 
