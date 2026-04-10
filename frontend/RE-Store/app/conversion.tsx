@@ -52,6 +52,8 @@ export default function Conversion() {
 
         const ref = maskRef.current;
 
+        console.log('\x1b[33m Run Request Recieved \x1b[0m');
+
         if (!ref || typeof ref.capture !== 'function') {
             console.log("Capture not available");
             return;
@@ -74,6 +76,7 @@ export default function Conversion() {
             method: 'PUT',
             body: formData,
         });
+        console.log('\x1b[32m Run Completed \x1b[0m');
     };
 
     return (
@@ -150,22 +153,22 @@ const styles = StyleSheet.create({
     elevation: 10
   },
   placeholder: {
-  width: width * 0.8,
-  height: width * 0.8,
-  backgroundColor: '#2D1B4E',
-  borderRadius: 24,
-  borderWidth: 2,
-  borderColor: '#8B3FC8',
-  borderStyle: 'dashed',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 12,
-  shadowColor: '#8B3FC8',
-  shadowOffset: { width: 0, height: 0 },
-  shadowOpacity: 0.6,
-  shadowRadius: 20,
-  elevation: 10,
-},
+    width: width * 0.8,
+    height: width * 0.8,
+    backgroundColor: '#2D1B4E',
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#8B3FC8',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    shadowColor: '#8B3FC8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 10,
+    },
 exit: {
     position: "absolute",
     top: -width/8,

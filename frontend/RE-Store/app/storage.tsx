@@ -12,7 +12,6 @@ export default function Storage() {
     const firstPhotos = groups.map((g: { photos: string[] }) => g.photos[0]).filter(Boolean);
     setPhotos(firstPhotos);
   }, []);
-
   return (
     <View style={styles.container}>
        <TouchableOpacity onPress = {() => router.push('..')}>
@@ -20,11 +19,11 @@ export default function Storage() {
         </TouchableOpacity>
       <Text style={styles.labelText}>Storage</Text>
       {photos.length > 0 ? (
-        <FlatList columnWrapperStyle={{ justifyContent: 'flex-start' }} style={{marginTop: height/16, alignSelf: "flex-start"}} data={photos} numColumns={3} keyExtractor={(item,index) => index.toString()}
-          renderItem={({item}) => (<Image source={{uri: item}} style={styles.image}/>)}
+        <FlatList columnWrapperStyle={{ justifyContent: 'flex-start' }} style={styles.list} data={photos} numColumns={3} keyExtractor={(item,index) => index.toString()}
+          renderItem={({item, index}) => (<TouchableOpacity onPress = {() => router.push({ pathname: '/viewer', params: { groupNum: index } })}><Image source={{uri: item}} style={styles.image}/></TouchableOpacity>)}
         />
       ) : (
-        <Text style={[styles.labelText, {verticalAlign: "middle"}]}>N/A</Text>
+        <Text style={[styles.labelText, {verticalAlign: "middle"}]}>No Photos Yet</Text>
       )}
     </View>
   );
@@ -37,10 +36,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: height/8,
   },
+  list: {
+    marginTop: height/16,
+    alignSelf: "flex-start",
+    margin: width/16,
+  },
   image: {
-    width: width/3,
-    height: width/3,
-    resizeMode: 'contain',
+    width: width*7/24,
+    height: width*7/24,
+    borderRadius: width/16,
   },
   exit: {
       position: "absolute",

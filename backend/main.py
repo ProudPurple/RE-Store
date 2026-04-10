@@ -68,7 +68,7 @@ def upload_to_cloudinary(image_path: str, folder: str = "restorations") -> str:
 
 def load_sharpener():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
+
     model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
     upsampler = RealESRGANer(
         scale=4,
@@ -104,6 +104,9 @@ def load_colorizer():
         dec_layers=9
     )
     ckpt = torch.load('weights/ddcolor.pth', map_location='cpu', weights_only=True)
+    # DDColor checkpoints are often nested under a key:
+    state_dict = ckpt.get('params', ckpt.get('state_dict', ckpt))
+    model.load_state_dict(state_dict, strict=False)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval().to(device)
     return model, device
@@ -190,36 +193,44 @@ async def fix_image(img, mask_img):
     
 
 async def colorize_image(img):
-    # Prepare tensor for DDColor
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img_pil = Image.fromarray(img_rgb).resize([1024, 1024])
-    transform = transforms.Compose([transforms.ToTensor()])
-    tensor = transform(img_pil).unsqueeze(0).to(device)
+    orig_h, orig_w = img.shape[:2]
+    input_size = 512
 
-    # Run colorization
+    # --- Preprocessing: extract L channel only ---
+    img_resized = cv2.resize(img, (input_size, input_size))
+    img_lab = cv2.cvtColor(img_resized, cv2.COLOR_BGR2LAB)
+    l_channel = img_lab[:, :, 0]
+    l_norm = l_channel.astype(np.float32) / 255.0
+    l_tensor = np.stack([l_norm, l_norm, l_norm], axis=2)
+    tensor = transforms.ToTensor()(l_tensor).unsqueeze(0).to(device)
+
+    # --- Inference ---
     with torch.no_grad():
         output = colorizer(tensor)
 
-    # Extract UV channels
-    uv = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
-    uv = (uv * 128).clip(-128, 127)
+    # --- Postprocessing: decode AB channels ---
+    ab = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
 
-    # Build LAB image and replace AB channels
-    img_resized = cv2.resize(img, (1024, 1024))
-    img_lab = cv2.cvtColor(img_resized, cv2.COLOR_BGR2LAB)
-    ab = uv.copy()
-    ab[:, :, 0] = (ab[:, :, 0] + 128).clip(0, 255)
-    ab[:, :, 1] = (ab[:, :, 1] + 128).clip(0, 255)
-    img_lab[:, :, 1] = ab[:, :, 0].astype(np.uint8)
-    img_lab[:, :, 2] = ab[:, :, 1].astype(np.uint8)
+    # Normalize raw model output to [-1, 1] (output is unnormalized, ~[-25, 40])
+    abs_max = np.abs(ab).max()
+    if abs_max > 0:
+        ab = ab / abs_max
 
-    # Convert back to BGR and blend with original
-    result = cv2.cvtColor(img_lab, cv2.COLOR_LAB2BGR)
-    result = cv2.addWeighted(result, 0.6, img_resized, 0.4, 0)
+    SATURATION = 0.7  # tune between 0.6–1.0 to taste
+    ab = (ab * 128 * SATURATION).clip(-128, 127)
+    ab_shifted = (ab + 128).clip(0, 255).astype(np.uint8)
 
-    # Resize back to original dimensions
-    result = cv2.resize(result, (img.shape[1], img.shape[0]))
+    # Resize ab to original size
+    ab_resized = cv2.resize(ab_shifted, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
 
+    # Rebuild LAB with original L + predicted AB
+    orig_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    orig_lab[:, :, 1] = ab_resized[:, :, 0]
+    orig_lab[:, :, 2] = ab_resized[:, :, 1]
+
+    result = cv2.cvtColor(orig_lab, cv2.COLOR_LAB2BGR)
+
+    # --- Save & upload ---
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         cv2.imwrite(tmp.name, result)
         store_photo(upload_to_cloudinary(tmp.name))
