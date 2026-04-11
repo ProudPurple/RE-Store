@@ -1,5 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
-import { FlatList, View, Text, Image, Dimensions, StyleSheet, TouchableOpacity } from 'react-native';
+import { Share, View, Text, Image, Dimensions, StyleSheet, TouchableOpacity } from 'react-native';
+import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system/legacy';
 import groups from '../assets/photos/groups.json';
 import { router } from 'expo-router'
 import { getFontFamily } from "@/utils/fontFamily";
@@ -20,6 +22,60 @@ export default function Viewer() {
       setImageUri(photos[curPhoto]);
     }
   }, [index, curPhoto]);
+
+  const onShare = async () => {
+    try {
+      if (!imageUri) {
+        console.log("No image to share");
+        return;
+      }
+
+      // Download the image to cache directory
+      const fileName = `RE-Store-${Date.now()}.jpg`;
+      const fileUri = (FileSystem.cacheDirectory || '') + fileName;
+      
+      const downloadResult = await FileSystem.downloadAsync(imageUri, fileUri);
+      
+      // Share the actual image file
+      const result = await Share.share({
+        url: downloadResult.uri,
+        message: 'Check out this photo from RE-Store!',
+        title: 'Share Photo',
+      });
+    } catch (error) {
+      console.log("Error sharing content: ", error);
+    }
+  };
+
+  const onDownload = async () => {
+    try {
+      // Request permission to access media library
+      const permission = await MediaLibrary.requestPermissionsAsync();
+      if (!permission.granted) {
+        console.log("Permission to access media library was denied");
+        return;
+      }
+
+      if (!imageUri) {
+        console.log("No image to download");
+        return;
+      }
+
+      // Download the image to cache directory
+      const fileName = `RE-Store-${Date.now()}.jpg`;
+      const fileUri = (FileSystem.cacheDirectory || '') + fileName;
+      
+      const downloadResult = await FileSystem.downloadAsync(imageUri, fileUri);
+      
+      // Save to photo library
+      const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+      await MediaLibrary.createAlbumAsync('RE-Store', asset, false);
+      console.log("Photo saved successfully!");
+    } catch (error) {
+      console.log("Error downloading photo: ", error);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress = {() => router.push('..')}><Image source={require('../assets/images/back-arrow.png')} style={styles.exit}/></TouchableOpacity>
@@ -34,6 +90,14 @@ export default function Viewer() {
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setCurPhoto(curPhoto < 4 ? curPhoto + 4 : curPhoto - 4)} style={[styles.button, curPhoto < 4 ? {backgroundColor: "#8B3FC8"} : {backgroundColor: "#ba7de9"}]}>
           <Image source={require('../assets/images/fix.png')} style={styles.icon}/>
+        </TouchableOpacity>
+      </View>
+      <View style={{flexDirection: "row", gap: width/3, marginTop: height/16}}>
+        <TouchableOpacity onPress={onShare} style={[styles.button, {backgroundColor: "#8B3FC8", width: width/6, height: width/6}]}>
+          <Image source={require('../assets/images/upload.png')} style={[styles.icon, {width: width/8, height: width/8}]}/>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onDownload} style={[styles.button, {backgroundColor: "#8B3FC8", width: width/6, height: width/6}]}>
+          <Image source={require('../assets/images/download.png')} style={[styles.icon, {width: width/8, height: width/8}]}/>
         </TouchableOpacity>
       </View>
     </View>
