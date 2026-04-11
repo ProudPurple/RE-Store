@@ -166,8 +166,8 @@ async def fix_image(img, mask_img):
     image_pil = Image.fromarray(cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB))
     mask_pil = Image.fromarray(mask_binary).convert("L")
 
-    prompt = "high quality restored photograph, seamless reconstruction of damaged areas, realistic textures, consistent lighting, detailed"
-    negative_prompt = "blurry, distorted, artifacts, oversaturated, low quality, unrealistic"
+    prompt = "high quality restored photograph, seamless reconstruction of damaged areas, realistic textures, consistent lighting, detailed face and potraits"
+    negative_prompt = "blurry, distorted, artifacts, oversaturated, low quality, unrealistic, bad anatomy"
 
     torch.cuda.empty_cache()
     inpainted = pipe(

@@ -1,9 +1,13 @@
-import { StyleSheet, TouchableOpacity, Text, View, Dimensions, Platform } from "react-native";
+import { StyleSheet, TouchableOpacity, Text, View, Dimensions, Image } from "react-native";
 import { useFonts } from 'expo-font';
 import { router } from "expo-router";
 import { getFontFamily } from "@/utils/fontFamily";
 
-
+/* TODO:
+- Movement / Deletion of Photos in Storage
+- Reset Highlighted Areas in Conversion
+- One at a Time Conversion Limit
+*/
 
 const {width, height} = Dimensions.get('window');
 
@@ -15,12 +19,15 @@ export default function Index() {
   return (
     <View style={styles.container}>
       <Text style={styles.titleText}>RE-Store</Text>
+      <Image source={require('../assets/images/logo.png')} style={styles.image}/>
       <TouchableOpacity style={styles.button}onPress={() => router.push('/storage')}>
         <Text style={styles.buttonText}>Storage</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.button}onPress={() => router.push('/conversion')}>
-        <Text style={styles.buttonText}>Conversion</Text>
-      </TouchableOpacity>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity style={styles.button}onPress={() => router.push('/conversion')}>
+          <Text style={styles.buttonText}>Conversion</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -30,23 +37,24 @@ const styles = StyleSheet.create({
     flex:1,
     backgroundColor:"#200b30",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 25,
   },
   titleText: {
     color: "#F0F0F0",
     fontSize: height/12,
     fontFamily: getFontFamily("normal"),
     textAlign: "center",
-    paddingBottom: height/3
+    paddingTop: height/12,
+  },
+  image: {
+    width: width,
+    height: width,
+    alignItems: 'center',
   },
   button: {
     width: width*3/4,
     height: height*1/8,
-    justifyContent: "center",
     alignItems: "center",
     backgroundColor: '#200b30',
-    padding: 15,
     borderRadius: width*3/8,
     borderWidth: 4,
     borderColor: '#C77DFF',
@@ -54,14 +62,16 @@ const styles = StyleSheet.create({
     shadowOffset: {width: 0, height: 0},
     shadowOpacity: 0.4,
     shadowRadius: 10,
-    elevation: 10
+    elevation: 10,
   },
   buttonText: {
     color: "#F0F0F0",
     fontSize:height/20,
     fontFamily: getFontFamily("normal"),
     fontWeight:"bold",
-    textAlign: "center",
-    textAlignVertical: "center",
+    paddingTop: height/64,
+  },
+  buttonContainer: {
+    marginTop: height/32,
   },
 });

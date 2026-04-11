@@ -1,11 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
-import { Share, View, Text, Image, Dimensions, StyleSheet, TouchableOpacity } from 'react-native';
+import { Share, View, Text, Image, Dimensions, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 import groups from '../assets/photos/groups.json';
 import { router } from 'expo-router'
 import { getFontFamily } from "@/utils/fontFamily";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 const {width, height} = Dimensions.get('window');
 
 export default function Viewer() {
@@ -42,6 +42,7 @@ export default function Viewer() {
         message: 'Check out this photo from RE-Store!',
         title: 'Share Photo',
       });
+      startAnimationUp();
     } catch (error) {
       console.log("Error sharing content: ", error);
     }
@@ -71,14 +72,50 @@ export default function Viewer() {
       const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
       await MediaLibrary.createAlbumAsync('RE-Store', asset, false);
       console.log("Photo saved successfully!");
+      startAnimationDown();
     } catch (error) {
       console.log("Error downloading photo: ", error);
     }
   };
 
+  const fadeAnimUp = useRef(new Animated.Value(0)).current;
+  const fadeAnimDown = useRef(new Animated.Value(0)).current;
+
+  const startAnimationUp = () => {
+    Animated.sequence([
+      Animated.timing(fadeAnimUp, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.delay(1000), 
+      Animated.timing(fadeAnimUp, {
+        toValue: 0,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+
+  const startAnimationDown = () => {
+    Animated.sequence([
+      Animated.timing(fadeAnimDown, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.delay(1000), 
+      Animated.timing(fadeAnimDown, {
+        toValue: 0,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress = {() => router.push('..')}><Image source={require('../assets/images/back-arrow.png')} style={styles.exit}/></TouchableOpacity>
+      <TouchableOpacity onPress = {() => router.push('/storage')}><Image source={require('../assets/images/back-arrow.png')} style={styles.exit}/></TouchableOpacity>
       <Text style={styles.labelText}>View Your Image</Text>
       <Image source={imageUri ? { uri: imageUri } : require('../assets/images/loading.png')} style={imageUri ? styles.image : styles.placeholder}/>
       <View style={{flexDirection: "row", gap: width/16, marginTop: height/16}}>
@@ -92,7 +129,11 @@ export default function Viewer() {
           <Image source={require('../assets/images/fix.png')} style={styles.icon}/>
         </TouchableOpacity>
       </View>
-      <View style={{flexDirection: "row", gap: width/3, marginTop: height/16}}>
+      <View style={{flexDirection: "row", marginTop: height/32, alignContent: "center", alignSelf: "flex-start", marginLeft: width*19/128}}>
+        <Animated.View style={{opacity: fadeAnimUp}}><Text style={[styles.pingText, {marginRight: width/4}]}>Uploaded!</Text></Animated.View>
+        <Animated.View style={{opacity: fadeAnimDown}}><Text style={[styles.pingText]}>Downloaded!</Text></Animated.View>
+      </View>
+      <View style={{flexDirection: "row", gap: width/3, marginTop: height/32,}}>
         <TouchableOpacity onPress={onShare} style={[styles.button, {backgroundColor: "#8B3FC8", width: width/6, height: width/6}]}>
           <Image source={require('../assets/images/upload.png')} style={[styles.icon, {width: width/8, height: width/8}]}/>
         </TouchableOpacity>
@@ -166,11 +207,16 @@ const styles = StyleSheet.create({
       height: width/8,
       borderRadius: width/16,
   },
+  pingText: {
+      color: "#F0F0F0",
+      position: "fixed",
+      fontSize:height/40,
+      fontFamily: getFontFamily("normal"),
+  },
   labelText: {
       color: "#F0F0F0",
       fontSize:height/15,
       fontFamily: getFontFamily("normal"),
-      fontWeight:"bold",
       textAlign: "center",
   },
 });

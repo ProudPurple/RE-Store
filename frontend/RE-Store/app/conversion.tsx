@@ -1,5 +1,6 @@
 import { StyleSheet, Image, TouchableOpacity, Text, View, Dimensions, PanResponder } from "react-native";
 import ViewShot from 'react-native-view-shot';
+import groups from '../assets/photos/groups.json';
 import Svg, { Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { useState, useRef } from 'react';
@@ -117,7 +118,7 @@ export default function Conversion() {
                     </View>
                 )}
             {imageUri && (
-                <TouchableOpacity style={[styles.button, {margin: height/16}]} onPress={run}>
+                <TouchableOpacity style={[styles.button, {margin: height/16}]} onPress={() => {run(); router.push({ pathname: '/viewer', params: { groupNum: groups.length } });}}>
                     <Text style={styles.buttonText}>Confirm</Text>
                 </TouchableOpacity>
             )}
