@@ -14,7 +14,7 @@ export default function Storage() {
   }, []);
   return (
     <View style={styles.container}>
-       <TouchableOpacity onPress = {() => router.push('/')}>
+       <TouchableOpacity onPress = {() => router.push('..')}>
             <Image source={require('../assets/images/back-arrow.png')} style={styles.exit}/>
         </TouchableOpacity>
       <Text style={styles.labelText}>Storage</Text>

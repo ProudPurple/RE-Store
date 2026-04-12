@@ -3,12 +3,6 @@ import { useFonts } from 'expo-font';
 import { router } from "expo-router";
 import { getFontFamily } from "@/utils/fontFamily";
 
-/* TODO:
-- Movement / Deletion of Photos in Storage
-- Reset Highlighted Areas in Conversion
-- One at a Time Conversion Limit
-*/
-
 const {width, height} = Dimensions.get('window');
 
 export default function Index() {
@@ -54,6 +48,7 @@ const styles = StyleSheet.create({
     width: width*3/4,
     height: height*1/8,
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: '#200b30',
     borderRadius: width*3/8,
     borderWidth: 4,
@@ -69,7 +64,6 @@ const styles = StyleSheet.create({
     fontSize:height/20,
     fontFamily: getFontFamily("normal"),
     fontWeight:"bold",
-    paddingTop: height/64,
   },
   buttonContainer: {
     marginTop: height/32,

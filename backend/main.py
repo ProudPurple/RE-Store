@@ -44,7 +44,7 @@ def load_groups():
 
 def save_groups(groups):
     with open(GROUPS_FILE, "w") as f:
-        json.dump(groups, f)
+        json.dump(groups, f, indent=2)
 
 def save_and_upload(img):
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
@@ -57,7 +57,7 @@ def store_photo(url: str):
     groups = load_groups()
     current = groups[-1] if groups else None
     if not current or len(current["photos"]) >= 8:
-        current = {"id": f"group-{len(groups) + 1}", "photos": []}
+        current = { "photos": []}
         groups.append(current)
     current["photos"].append(url)
     save_groups(groups)
@@ -68,13 +68,12 @@ def upload_to_cloudinary(image_path: str, folder: str = "restorations") -> str:
 
 def load_sharpener():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
     upsampler = RealESRGANer(
         scale=4,
         model_path="weights/RealESRGAN_x4plus.pth",
         model=model,
-        tile=512,
+        tile=256,
         tile_pad=10,
         pre_pad=0,
         half=False,
@@ -145,7 +144,6 @@ sharpener = silent_load(load_sharpener)
 async def run(file: UploadFile = File(...), mask: UploadFile = File(...)):
     contents = await file.read()
     mask_contents = await mask.read()
-    
     img = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
     mask_img = cv2.imdecode(np.frombuffer(mask_contents, np.uint8), cv2.IMREAD_GRAYSCALE)
 
@@ -240,12 +238,13 @@ async def colorize_image(img):
 
 async def sharpen_image(img):
     h, w, _ = img.shape
-
-    max_dim = 1024
+    max_dim = 512
+    original_h, original_w = h, w
+    
     if max(h, w) > max_dim:
         scale = max_dim / max(h, w)
         img = cv2.resize(img, (int(w * scale), int(h * scale)))
-
+    
     # Run GFPGAN enhancement
     _, _, sharpened_img = sharpener.enhance(
         img,
@@ -254,13 +253,13 @@ async def sharpen_image(img):
         paste_back=True,
         weight=0.8
     )
-
+    
     if sharpened_img is None:
         sharpened_img = img
 
     # Apply unsharp mask for extra crispness
     gaussian = cv2.GaussianBlur(sharpened_img, (0, 0), 3)
-    sharpened_img = cv2.addWeighted(sharpened_img, 1.8, gaussian, -0.8, 0)
+    sharpened_img = cv2.addWeighted(sharpened_img, 1.3, gaussian, -0.3, 0)
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         cv2.imwrite(tmp.name, sharpened_img)

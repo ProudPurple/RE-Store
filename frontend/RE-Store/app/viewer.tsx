@@ -13,11 +13,14 @@ export default function Viewer() {
   const index = parseInt(groupNum as string);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [curPhoto, setCurPhoto] = useState(0);
   
   useEffect(() => {
     const photos = groups[index]?.photos || [];
     setPhotos(photos);
+    if (!imageUri)
+      setImageLoaded(false);
     if (photos.length > 0) {
       setImageUri(photos[curPhoto]);
     }
@@ -25,10 +28,8 @@ export default function Viewer() {
 
   const onShare = async () => {
     try {
-      if (!imageUri) {
-        console.log("No image to share");
+      if (!imageUri)
         return;
-      }
 
       // Download the image to cache directory
       const fileName = `RE-Store-${Date.now()}.jpg`;
@@ -44,7 +45,7 @@ export default function Viewer() {
       });
       startAnimationUp();
     } catch (error) {
-      console.log("Error sharing content: ", error);
+      console.log("Error Sharing Content: ", error);
     }
   };
 
@@ -53,14 +54,12 @@ export default function Viewer() {
       // Request permission to access media library
       const permission = await MediaLibrary.requestPermissionsAsync();
       if (!permission.granted) {
-        console.log("Permission to access media library was denied");
+        console.log("Permission to Access Media Library was Denied");
         return;
       }
 
-      if (!imageUri) {
-        console.log("No image to download");
+      if (!imageUri)
         return;
-      }
 
       // Download the image to cache directory
       const fileName = `RE-Store-${Date.now()}.jpg`;
@@ -71,10 +70,9 @@ export default function Viewer() {
       // Save to photo library
       const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
       await MediaLibrary.createAlbumAsync('RE-Store', asset, false);
-      console.log("Photo saved successfully!");
       startAnimationDown();
     } catch (error) {
-      console.log("Error downloading photo: ", error);
+      console.log("Error Downloading Photo: ", error);
     }
   };
 
@@ -115,9 +113,9 @@ export default function Viewer() {
   };
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress = {() => router.push('/storage')}><Image source={require('../assets/images/back-arrow.png')} style={styles.exit}/></TouchableOpacity>
+      <TouchableOpacity onPress = {() => router.back()}><Image source={require('../assets/images/back-arrow.png')} style={styles.exit}/></TouchableOpacity>
       <Text style={styles.labelText}>View Your Image</Text>
-      <Image source={imageUri ? { uri: imageUri } : require('../assets/images/loading.png')} style={imageUri ? styles.image : styles.placeholder}/>
+      <Image source={imageUri ? { uri: imageUri } : require('../assets/images/loading.png')} style={!imageUri || !imageLoaded ? styles.placeholder : styles.image} onLoad={() => setImageLoaded(true)}/>
       <View style={{flexDirection: "row", gap: width/16, marginTop: height/16}}>
         <TouchableOpacity onPress={() => setCurPhoto(curPhoto%2 == 0 ? curPhoto + 1 : curPhoto - 1)} style={[styles.button, curPhoto%2 == 0 ? {backgroundColor: "#8B3FC8"} : {backgroundColor: "#ba7de9"}]}>
           <Image source={require('../assets/images/colorize.png')} style={styles.icon}/>

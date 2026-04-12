@@ -1,4 +1,4 @@
-import { StyleSheet, Image, TouchableOpacity, Text, View, Dimensions, PanResponder } from "react-native";
+import { StyleSheet, Image, TouchableOpacity, Text, View, Dimensions, PanResponder, Animated } from "react-native";
 import ViewShot from 'react-native-view-shot';
 import groups from '../assets/photos/groups.json';
 import Svg, { Path } from 'react-native-svg';
@@ -48,37 +48,69 @@ export default function Conversion() {
     };
 
     const run = async () => {
-        if (!imageUri)
-            return;
+    if (!imageUri)
+        return;
+    if (groups[groups.length - 1].photos.length % 8 != 0) {
+        startAnimation();
+        return;
+    }
+    
+    const ref = maskRef.current;
 
-        const ref = maskRef.current;
+    console.log('\x1b[33m Run Request Recieved \x1b[0m');
 
-        console.log('\x1b[33m Run Request Recieved \x1b[0m');
+    if (!ref || typeof ref.capture !== 'function') {
+        console.log("Capture not available");
+        return;
+    }
 
-        if (!ref || typeof ref.capture !== 'function') {
-            console.log("Capture not available");
-            return;
-        }
+    
+    try {
         const maskUri = await ref.capture();
-
         const formData = new FormData();
+
+        router.replace({ pathname: '/viewer', params: { groupNum: groups.length } });
+
         formData.append('file', {
             uri: imageUri,
             type: 'image/png',
             name: 'photo.png',
         } as any);
+
         formData.append('mask', {
             uri: maskUri,
             type: 'image/png',
             name: 'mask.png',
         } as any);
-
+        
         await fetch(`${API_URL}/run`, {
             method: 'PUT',
             body: formData,
         });
+        
         console.log('\x1b[32m Run Completed \x1b[0m');
-    };
+    } catch (error) {
+        console.log("Error during run:", error);
+    }
+};
+
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    const startAnimation = () => {
+        Animated.sequence([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.delay(1000), 
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      };
 
     return (
         <View style={styles.container}>
@@ -118,79 +150,109 @@ export default function Conversion() {
                     </View>
                 )}
             {imageUri && (
-                <TouchableOpacity style={[styles.button, {margin: height/16}]} onPress={() => {run(); router.push({ pathname: '/viewer', params: { groupNum: groups.length } });}}>
-                    <Text style={styles.buttonText}>Confirm</Text>
-                </TouchableOpacity>
+                <View>
+                    <TouchableOpacity style={[styles.button, {marginTop: height/16}]} onPress={() => {run();}}>
+                        <Text style={styles.buttonText}>Confirm</Text>
+                    </TouchableOpacity>
+                    <View style={{ flexDirection: "row", justifyContent: "center", gap: width/8}}>
+                        <TouchableOpacity style={[styles.smallButton, {alignSelf: "center", marginTop: height/32}]} onPress={() => {setPaths([]);}}>
+                            <Image source={require('../assets/images/x.png')} style={styles.icon}/>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.smallButton, {alignSelf: "center", marginTop: height/32}]} onPress={() => {setPaths([]); pickImage();}}>
+                            <Image source={require('../assets/images/redo.png')} style={styles.icon}/>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             )}
+            <Animated.View style={{opacity: fadeAnim}}><Text style={[styles.labelText, {fontSize: height/40, marginTop: height/32}]}>Already Converting an Image</Text></Animated.View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex:1,
-    backgroundColor:"#200b30",
-    alignItems: "center",
-    paddingTop: height/8,
-  },
-  image: {
-    width: width*7/8,
-    height: width*7/8,
-    resizeMode: 'contain',
-  },
-  button: {
-    width: width*3/4,
-    height: height*1/12,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: '#200b30',
-    borderRadius: height*3/8,
-    borderWidth: 4,
-    borderColor: '#C77DFF',
-    shadowColor: '#C77DFF',
-    shadowOffset: {width: 0, height: 0},
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 10
-  },
-  placeholder: {
-    width: width * 0.8,
-    height: width * 0.8,
-    backgroundColor: '#2D1B4E',
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#8B3FC8',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    shadowColor: '#8B3FC8',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 10,
+    container: {
+        flex:1,
+        backgroundColor:"#200b30",
+        alignItems: "center",
+        paddingTop: height/8,
     },
-exit: {
-    position: "absolute",
-    top: -width/8,
-    left: -width/2 + width/64,
-    width: width/8,
-    height: width/8,
-    borderRadius: width/16,
-},
-labelText: {
-    color: "#F0F0F0",
-    fontSize:height/20,
-    fontFamily: getFontFamily("normal"),
-    fontWeight:"bold",
-    textAlign: "center",
-},
-  buttonText: {
-    color: "#F0F0F0",
-    fontSize:height/24,
-    fontFamily: getFontFamily("normal"),
-    fontWeight:"bold",
-    textAlign: "center",
-    textAlignVertical: "center",
-  },
+    image: {
+        width: width*7/8,
+        height: width*7/8,
+        resizeMode: 'contain',
+    },
+    icon: {
+        width: width/12,
+        height: width/12,
+    },
+    button: {
+        width: width*3/4,
+        height: height*1/12,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: '#200b30',
+        borderRadius: height*3/8,
+        borderWidth: 4,
+        borderColor: '#C77DFF',
+        shadowColor: '#C77DFF',
+        shadowOffset: {width: 0, height: 0},
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+        elevation: 10
+    },
+    smallButton: {
+        width: width/6,
+        height: width/6,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 15,
+        borderRadius: width*3/8,
+        borderWidth: 4,
+        borderColor: '#C77DFF',
+        shadowColor: '#C77DFF',
+        shadowOffset: {width: 0, height: 0},
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+        elevation: 10
+    },
+    placeholder: {
+        width: width * 0.8,
+        height: width * 0.8,
+        backgroundColor: '#2D1B4E',
+        borderRadius: 24,
+        borderWidth: 2,
+        borderColor: '#8B3FC8',
+        borderStyle: 'dashed',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        shadowColor: '#8B3FC8',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    exit: {
+        position: "absolute",
+        top: -width/8,
+        left: -width/2 + width/64,
+        width: width/8,
+        height: width/8,
+        borderRadius: width/16,
+    },
+    labelText: {
+        color: "#F0F0F0",
+        fontSize:height/20,
+        fontFamily: getFontFamily("normal"),
+        fontWeight:"bold",
+        textAlign: "center",
+    },
+    buttonText: {
+        color: "#F0F0F0",
+        fontSize:height/24,
+        fontFamily: getFontFamily("normal"),
+        fontWeight:"bold",
+        textAlign: "center",
+        textAlignVertical: "center",
+    },
 });
