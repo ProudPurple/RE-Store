@@ -1,34 +1,38 @@
 import { useLocalSearchParams } from 'expo-router';
-import { Share, View, Text, Image, Dimensions, StyleSheet, TouchableOpacity, Animated } from 'react-native';
-import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system/legacy';
-import groups from '../assets/photos/groups.json';
+import { Share, View, Text, Image, Dimensions, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { getFontFamily } from "@/utils/fontFamily";
+import { useGroups } from "@/utils/api";
 import { useState, useEffect, useRef } from 'react';
+
+// Native-only modules crash the web build when loaded, so only load them on iOS/Android
+const MediaLibrary = (Platform.OS === 'web' ? null : require('expo-media-library')) as typeof import('expo-media-library');
+const FileSystem = (Platform.OS === 'web' ? null : require('expo-file-system/legacy')) as typeof import('expo-file-system/legacy');
 
 const {width, height} = Dimensions.get('window');
 
 export default function Viewer() {
   const { groupNum } = useLocalSearchParams();
   const index = parseInt(groupNum as string);
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [photos, setPhotos] = useState<string[]>([]);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [curPhoto, setCurPhoto] = useState(0);
+  // Poll so results show up as the backend finishes each step
+  const { groups } = useGroups(3000);
+  const imageUri = groups[index]?.photos[curPhoto] ?? null;
 
   useEffect(() => {
-    const photos = groups[index]?.photos || [];
-    setPhotos(photos);
     setImageLoaded(false);
-    if (photos.length > 0) {
-      setImageUri(photos[curPhoto]);
-    }
-  }, [index, curPhoto]);
+  }, [imageUri]);
 
   const onShare = async () => {
     try {
       if (!imageUri) return;
+      if (Platform.OS === 'web') {
+        if (navigator.share) await navigator.share({ url: imageUri, text: 'Check out this photo from RE-Store!' });
+        else await navigator.clipboard.writeText(imageUri);
+        startAnimationUp();
+        return;
+      }
       const fileName = `RE-Store-${Date.now()}.jpg`;
       const fileUri = (FileSystem.cacheDirectory || '') + fileName;
       const downloadResult = await FileSystem.downloadAsync(imageUri, fileUri);
@@ -41,6 +45,15 @@ export default function Viewer() {
 
   const onDownload = async () => {
     try {
+      if (Platform.OS === 'web') {
+        if (!imageUri) return;
+        // fl_attachment makes Cloudinary send the image as a download
+        const link = document.createElement('a');
+        link.href = imageUri.replace('/upload/', `/upload/fl_attachment:RE-Store-${Date.now()}/`);
+        link.click();
+        startAnimationDown();
+        return;
+      }
       const permission = await MediaLibrary.requestPermissionsAsync();
       if (!permission.granted) { console.log("Permission Denied"); return; }
       if (!imageUri) return;

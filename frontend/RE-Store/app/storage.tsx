@@ -1,20 +1,15 @@
 import { FlatList, View, Text, Image, Dimensions, StyleSheet, TouchableOpacity } from 'react-native';
-import groups from '../assets/photos/groups.json';
 import { router } from 'expo-router';
 import { getFontFamily } from "@/utils/fontFamily";
-import { useState, useEffect } from 'react';
+import { useGroups } from "@/utils/api";
 
 const {width, height} = Dimensions.get('window');
 const THUMB = width * 0.28;
 const GAP = (width - THUMB * 3 - width * 0.14) / 2;
 
 export default function Storage() {
-  const [photos, setPhotos] = useState<string[]>([]);
-
-  useEffect(() => {
-    const firstPhotos = groups.map((g: { photos: string[] }) => g.photos[0]).filter(Boolean);
-    setPhotos(firstPhotos);
-  }, []);
+  const { groups } = useGroups();
+  const photos = groups.map(g => g.photos[0]).filter(Boolean);
 
   return (
     <View style={styles.container}>

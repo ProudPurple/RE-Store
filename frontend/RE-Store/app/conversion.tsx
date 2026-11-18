@@ -1,21 +1,53 @@
-import { StyleSheet, Image, TouchableOpacity, Text, View, Dimensions, PanResponder, Animated } from "react-native";
-import ViewShot from 'react-native-view-shot';
-import groups from '../assets/photos/groups.json';
+import { StyleSheet, Image, TouchableOpacity, Text, View, Dimensions, PanResponder, Animated, Platform } from "react-native";
+import ViewShot, { ViewShotRef } from 'react-native-view-shot';
 import Svg, { Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
+import { File } from 'expo-file-system';
 import { useState, useRef } from 'react';
 import { useFonts } from 'expo-font';
 import { router } from "expo-router";
 import { getFontFamily } from "@/utils/fontFamily";
+import { API_URL, API_HEADERS, useGroups, useRestoreEnabled } from "@/utils/api";
 
 const {width, height} = Dimensions.get('window');
-const API_URL = 'https://nonlinkage-unpunctiliously-goldie.ngrok-free.dev';
+
+const canvasToBlob = (canvas: HTMLCanvasElement) =>
+    new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png'));
+
+// Web has no crop step in the picker, so crop to the same centered square the canvas shows.
+const cropSquareWeb = async (uri: string) => {
+    const img = new window.Image();
+    img.src = uri;
+    await img.decode();
+    const size = Math.min(img.naturalWidth, img.naturalHeight);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    canvas.getContext('2d')!.drawImage(img, (img.naturalWidth - size) / 2, (img.naturalHeight - size) / 2, size, size, 0, 0, size, size);
+    return canvasToBlob(canvas);
+};
+
+const drawMaskWeb = (paths: string[], size: number) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 18;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    paths.forEach(d => ctx.stroke(new Path2D(d)));
+    return canvasToBlob(canvas);
+};
 
 export default function Conversion() {
-    const maskRef = useRef<ViewShot | null>(null);
+    const maskRef = useRef<ViewShotRef | null>(null);
     const [imageUri, setImageUri] = useState<string | null>(null);
     const [paths, setPaths] = useState<string[]>([]);
     const [curPath, setCurPath] = useState('');
+    const { groups } = useGroups();
+    const restoreEnabled = useRestoreEnabled();
+    const [toastText, setToastText] = useState('');
     const [loaded] = useFonts({
         'Anton-Regular': require('../assets/fonts/AntonRegular.ttf'),
     });
@@ -50,27 +82,35 @@ export default function Conversion() {
 
     const run = async () => {
         if (!imageUri) return;
-        if (groups[groups.length - 1].photos.length % 8 != 0) {
-            startAnimation();
+        if (!restoreEnabled) {
+            startAnimation('Demo mode: browse Storage for examples');
+            return;
+        }
+        if (groups.length && groups[groups.length - 1].photos.length % 8 != 0) {
+            startAnimation('Already processing an image');
             return;
         }
 
-        const ref = maskRef.current;
         console.log('\x1b[33m Run Request Received \x1b[0m');
-        if (!ref || typeof ref.capture !== 'function') {
-            console.log("Capture not available");
-            return;
-        }
 
         try {
-            const maskUri = await ref.capture();
             const formData = new FormData();
+            if (Platform.OS === 'web') {
+                formData.append('file', await cropSquareWeb(imageUri), 'photo.png');
+                formData.append('mask', await drawMaskWeb(paths, CANVAS), 'mask.png');
+            } else {
+                const ref = maskRef.current;
+                if (!ref || typeof ref.capture !== 'function') {
+                    console.log("Capture not available");
+                    return;
+                }
+                const maskUri = await ref.capture();
+                formData.append('file', new File(imageUri));
+                formData.append('mask', new File(maskUri));
+            }
             router.replace({ pathname: '/viewer', params: { groupNum: groups.length } });
 
-            formData.append('file', { uri: imageUri, type: 'image/png', name: 'photo.png' } as any);
-            formData.append('mask', { uri: maskUri, type: 'image/png', name: 'mask.png' } as any);
-
-            await fetch(`${API_URL}/run`, { method: 'PUT', body: formData });
+            await fetch(`${API_URL}/run`, { method: 'PUT', body: formData, headers: API_HEADERS });
             console.log('\x1b[32m Run Completed \x1b[0m');
         } catch (error) {
             console.log("Error during run:", error);
@@ -79,7 +119,8 @@ export default function Conversion() {
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
-    const startAnimation = () => {
+    const startAnimation = (text: string) => {
+        setToastText(text);
         Animated.sequence([
             Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
             Animated.delay(1000),
@@ -108,7 +149,8 @@ export default function Conversion() {
             {imageUri ? (
                 <View style={styles.canvasCard}>
                     <Image source={{ uri: imageUri }} style={styles.image}/>
-                    <Svg style={styles.svgOverlay} {...panResponder.panHandlers}>
+                    <View style={styles.svgOverlay} {...panResponder.panHandlers}>
+                    <Svg width="100%" height="100%" pointerEvents="none">
                         {paths.map((path, i) => (
                             <Path key={i} d={path} stroke="rgba(139,63,200,0.65)" strokeWidth={18} fill="none" strokeLinecap="round"/>
                         ))}
@@ -116,6 +158,7 @@ export default function Conversion() {
                             <Path d={curPath} stroke="rgba(139,63,200,0.65)" strokeWidth={18} fill="none" strokeLinecap="round"/>
                         ) : null}
                     </Svg>
+                    </View>
                     <ViewShot ref={maskRef} options={{ format: 'png', result: 'tmpfile' }} style={styles.maskShot}>
                         <Svg width="100%" height="100%">
                             {paths.map((path, i) => (
@@ -154,7 +197,7 @@ export default function Conversion() {
             )}
 
             <Animated.View style={[styles.toastContainer, { opacity: fadeAnim }]}>
-                <Text style={styles.toastText}>Already processing an image</Text>
+                <Text style={styles.toastText}>{toastText}</Text>
             </Animated.View>
 
         </View>

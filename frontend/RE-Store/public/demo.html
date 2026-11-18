@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RE-Store</title>
+  <script>
+    // Phones get the app directly; larger screens get it inside a phone-sized frame
+    if (window.innerWidth < 600) location.replace('/');
+  </script>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      background: radial-gradient(circle at 30% 20%, #3a1757, #0d0d0d 70%);
+      font-family: system-ui, sans-serif;
+      color: #f0f0f0;
+    }
+    .phone {
+      width: 390px;
+      height: min(844px, calc(100vh - 100px));
+      border: 12px solid #1c1c1c;
+      border-radius: 48px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(139, 63, 200, 0.35);
+    }
+    iframe { width: 100%; height: 100%; border: 0; display: block; }
+    p { margin: 0; color: rgba(199, 125, 255, 0.7); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="phone"><iframe src="/" title="RE-Store"></iframe></div>
+  <p>Open this link on your phone for the full-screen version</p>
+</body>
+</html>

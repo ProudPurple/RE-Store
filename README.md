@@ -108,7 +108,7 @@ uvicorn main:app --reload --port 3000 --host 0.0.0.0
 ngrok http 3000
 ```
 
-Update the `API_URL` constant in `frontend/RE-Store/app/conversion.tsx` with your ngrok or local URL.
+Update the `API_URL` constant in `frontend/RE-Store/utils/api.ts` with your ngrok or local URL.
 
 **Start the frontend:**
 
@@ -118,6 +118,39 @@ npx expo start
 ```
 
 Scan the QR code with Expo Go on your phone (or press `a` for Android emulator / `i` for iOS simulator).
+
+### Sharing a web demo
+
+The backend also serves a browser build of the app, so your ngrok URL doubles as a shareable demo link.
+
+```bash
+cd frontend/RE-Store
+npm run build:web          # exports to frontend/RE-Store/dist, which the backend serves
+```
+
+Then start the backend and ngrok as above, and send `https://<your-ngrok-domain>/demo.html`. Desktop visitors see the app in a phone frame and phones open it full-screen. The demo only works while your machine, the backend and ngrok are running. Rebuild after frontend changes.
+
+### Publishing to the cloud (Modal)
+
+To keep a demo online without your machine, deploy a free showcase to [Modal](https://modal.com). It serves the web app from a small CPU container that sleeps when unused, and reads the gallery live from Cloudinary. It has no GPU, so Restore shows a demo notice; run the backend locally to restore new photos.
+
+```bash
+cd frontend/RE-Store && npm run build:web
+cd ../../backend
+pip install modal && modal token new      # one-time login
+modal deploy modal_app.py
+```
+
+Cloudinary credentials are read from `backend/.env`. New restorations appear in the demo within a minute.
+
+The public site is hosted on Cloudflare Pages at **https://re-store.pages.dev**; its `functions/` forward `/groups` and `/config` to the Modal API. After frontend changes:
+
+```bash
+cd frontend/RE-Store
+npm run deploy:pages        # builds and publishes to re-store.pages.dev (one-time: npx wrangler login)
+```
+
+If the backend changes, also re-run `modal deploy modal_app.py`.
 
 ## Usage
 
@@ -147,7 +180,7 @@ Photo-Restoration/
     │   ├── storage.tsx      # Photo gallery grid
     │   └── viewer.tsx       # Result viewer
     ├── assets/
-    │   └── photos/groups.json   # Local photo group metadata
+    │   └── photos/groups.json   # Legacy; the gallery now lives in Cloudinary
     └── package.json
 ```
 
